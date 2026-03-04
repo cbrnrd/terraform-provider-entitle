@@ -232,6 +232,23 @@ func (r *WorkflowResource) Schema(ctx context.Context, req resource.SchemaReques
 															Description:         "Schedule applied to the approval entity.",
 															MarkdownDescription: "Schedule applied to the approval entity.",
 														},
+														"webhook": schema.SingleNestedAttribute{
+															Attributes: map[string]schema.Attribute{
+																"id": schema.StringAttribute{
+																	Required:            true,
+																	Description:         "Unique identifier of the webhook.",
+																	MarkdownDescription: "Unique identifier of the webhook.",
+																},
+																"name": schema.StringAttribute{
+																	Computed:            true,
+																	Description:         "Name of the webhook.",
+																	MarkdownDescription: "Name of the webhook.",
+																},
+															},
+															Optional:            true,
+															Description:         "Webhook to be invoked for notification.",
+															MarkdownDescription: "Webhook to be invoked for notification.",
+														},
 													},
 												},
 												Optional:            true,
@@ -300,6 +317,23 @@ func (r *WorkflowResource) Schema(ctx context.Context, req resource.SchemaReques
 															Optional:            true,
 															Description:         "Schedule applied to the approval entity.",
 															MarkdownDescription: "Schedule applied to the approval entity.",
+														},
+														"webhook": schema.SingleNestedAttribute{
+															Attributes: map[string]schema.Attribute{
+																"id": schema.StringAttribute{
+																	Optional:            true,
+																	Description:         "Unique identifier of the webhook.",
+																	MarkdownDescription: "Unique identifier of the webhook.",
+																},
+																"name": schema.StringAttribute{
+																	Computed:            true,
+																	Description:         "Name of the webhook.",
+																	MarkdownDescription: "Name of the webhook.",
+																},
+															},
+															Optional:            true,
+															Description:         "Webhook to be invoked for approval.",
+															MarkdownDescription: "Webhook to be invoked for approval.",
 														},
 													},
 												},
@@ -373,6 +407,7 @@ func (r *WorkflowResource) Create(
 	}
 
 	name := plan.Name.ValueString()
+	planRules := plan.Rules
 
 	rules, diags := getWorkflowsRules(ctx, plan.Rules)
 	resp.Diagnostics.Append(diags...)
@@ -415,6 +450,8 @@ func (r *WorkflowResource) Create(
 		return
 	}
 
+	reconcileEntityOrder(planRules, plan.Rules)
+
 	// Save data into Terraform state
 	diags = resp.State.Set(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
@@ -443,6 +480,7 @@ func (r *WorkflowResource) Read(
 	}
 
 	uid := uuid.MustParse(data.ID.String())
+	priorRules := data.Rules
 
 	workflowResp, err := r.client.WorkflowsShowWithResponse(ctx, uid)
 	if err != nil {
@@ -473,6 +511,8 @@ func (r *WorkflowResource) Read(
 		return
 	}
 
+	reconcileEntityOrder(priorRules, data.Rules)
+
 	// Save updated data into Terraform state
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
@@ -502,6 +542,7 @@ func (r *WorkflowResource) Update(
 
 	uid := uuid.MustParse(data.ID.String())
 	name := data.Name.ValueStringPointer()
+	planRules := data.Rules
 
 	rules, diags := getWorkflowsRules(ctx, data.Rules)
 	resp.Diagnostics.Append(diags...)
@@ -541,6 +582,8 @@ func (r *WorkflowResource) Update(
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	reconcileEntityOrder(planRules, data.Rules)
 
 	// Save updated data into Terraform state
 	diags = resp.State.Set(ctx, &data)
